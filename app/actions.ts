@@ -2,7 +2,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { initDb } from "@/lib/db";
-import { fetchAllData, fetchNews, fetchGallery, fetchStats } from "@/lib/data";
+import { fetchAllData, fetchNews, fetchGallery, fetchStats, fetchAboutContent } from "@/lib/data";
 import { revalidatePath } from "next/cache";
 
 function getSql() {
@@ -16,9 +16,11 @@ function getSql() {
 function revalidateAllPages() {
   try {
     revalidatePath("/");
+    revalidatePath("/about");
     revalidatePath("/news");
     revalidatePath("/gallery");
     revalidatePath("/achievements");
+    revalidatePath("/contact");
     revalidatePath("/admin");
   } catch (err) {
     console.error("Revalidate path error:", err);
@@ -43,6 +45,23 @@ export async function getGallery() {
 
 export async function getStats() {
   return await fetchStats();
+}
+
+export async function getAboutContent() {
+  return await fetchAboutContent();
+}
+
+export async function updateAboutContent(content: any) {
+  const sql = getSql();
+  await initDb();
+  await sql`
+    INSERT INTO site_content (key, content, updated_at)
+    VALUES ('about', ${JSON.stringify(content)}, CURRENT_TIMESTAMP)
+    ON CONFLICT (key)
+    DO UPDATE SET content = ${JSON.stringify(content)}, updated_at = CURRENT_TIMESTAMP;
+  `;
+  revalidateAllPages();
+  return { success: true };
 }
 
 export async function createNews(data: {
@@ -73,14 +92,15 @@ export async function deleteNews(id: number) {
 
 export async function addGalleryItem(data: {
   title: string;
+  description?: string;
   category: string;
   image_url: string;
 }) {
   const sql = getSql();
   await initDb();
   const res = await sql`
-    INSERT INTO gallery (title, category, image_url)
-    VALUES (${data.title}, ${data.category}, ${data.image_url})
+    INSERT INTO gallery (title, description, category, image_url)
+    VALUES (${data.title}, ${data.description || ''}, ${data.category}, ${data.image_url})
     RETURNING *;
   `;
   revalidateAllPages();
@@ -131,13 +151,63 @@ export async function deleteMessage(id: number) {
   return { success: true };
 }
 
-export async function updateStat(key: string, value: string, label?: string) {
+export async function updateStat(key: string, value: string, label?: string, icon?: string) {
   const sql = getSql();
+  await initDb();
   await sql`
-    UPDATE stats SET value = ${value} ${label ? sql`, label = ${label}` : sql``} WHERE key = ${key}
+    INSERT INTO stats (key, label, value, icon)
+    VALUES (${key}, ${label || key}, ${value}, ${icon || 'Activity'})
+    ON CONFLICT (key)
+    DO UPDATE SET 
+      value = EXCLUDED.value,
+      label = COALESCE(NULLIF(EXCLUDED.label, ''), stats.label),
+      icon = COALESCE(NULLIF(EXCLUDED.icon, ''), stats.icon);
   `;
   revalidateAllPages();
   return { success: true };
+}
+
+export async function addStat(data: {
+  key: string;
+  label: string;
+  value: string;
+  icon?: string;
+}) {
+  const sql = getSql();
+  await initDb();
+  const cleanKey = data.key.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  await sql`
+    INSERT INTO stats (key, label, value, icon)
+    VALUES (${cleanKey}, ${data.label}, ${data.value}, ${data.icon || 'Activity'})
+    ON CONFLICT (key)
+    DO UPDATE SET label = EXCLUDED.label, value = EXCLUDED.value;
+  `;
+  revalidateAllPages();
+  return { success: true };
+}
+
+export async function deleteStat(key: string) {
+  const sql = getSql();
+  await initDb();
+  await sql`DELETE FROM stats WHERE key = ${key}`;
+  revalidateAllPages();
+  return { success: true };
+}
+
+export async function seedDefaultStats() {
+  const sql = getSql();
+  await initDb();
+  await sql`
+    INSERT INTO stats (key, label, value, icon)
+    VALUES 
+      ('dialysis', 'Free Dialysis Sessions Completed', '49,000+', 'HeartHandshake'),
+      ('ys_men', 'Years of Y''s Men Leadership', '43+', 'Award'),
+      ('camps', 'Medical & Healthcare Camps', '120+', 'Stethoscope'),
+      ('beneficiaries', 'Families Supported', '50,000+', 'Users')
+    ON CONFLICT (key) DO UPDATE SET label = EXCLUDED.label, value = EXCLUDED.value;
+  `;
+  revalidateAllPages();
+  return await fetchStats();
 }
 
 export async function verifyAdminPasscode(passcode: string) {
@@ -147,4 +217,5 @@ export async function verifyAdminPasscode(passcode: string) {
   }
   return { success: false, message: "Invalid Admin Passcode" };
 }
+
 

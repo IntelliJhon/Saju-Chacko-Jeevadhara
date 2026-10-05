@@ -271,9 +271,14 @@ export default async function HomePage() {
                     <span className="text-[10px] font-bold uppercase text-amber-900 block">
                       {item.category}
                     </span>
-                    <h4 className="text-xs font-bold text-stone-900 mt-1 line-clamp-2">
+                    <h4 className="text-xs font-bold text-stone-900 mt-1 line-clamp-1">
                       {item.title}
                     </h4>
+                    {item.description && (
+                      <p className="text-[11px] text-stone-600 line-clamp-2 mt-1">
+                        {item.description}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))

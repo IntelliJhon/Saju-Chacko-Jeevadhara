@@ -55,6 +55,11 @@ export default async function GalleryPage() {
                   <h3 className="font-bold text-base text-stone-900 leading-snug">
                     {item.title}
                   </h3>
+                  {item.description && (
+                    <p className="text-xs text-stone-600 leading-relaxed pt-1 border-t border-stone-100 whitespace-pre-line">
+                      {item.description}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}
